@@ -9,27 +9,25 @@ import (
 	"context"
 )
 
-const getProfile = `-- name: GetProfile :one
-SELECT id, username, email, avatar_url 
+const getUserById = `-- name: GetUserById :one
+SELECT id, identity_provider, email, username, avatar_url, about_me, created_at, updated_at, deleted_at 
 FROM users
 WHERE deleted_at IS NULL AND id = $1
 `
 
-type GetProfileRow struct {
-	ID        int64
-	Username  string
-	Email     string
-	AvatarUrl string
-}
-
-func (q *Queries) GetProfile(ctx context.Context, id int64) (GetProfileRow, error) {
-	row := q.db.QueryRow(ctx, getProfile, id)
-	var i GetProfileRow
+func (q *Queries) GetUserById(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserById, id)
+	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.Username,
+		&i.IdentityProvider,
 		&i.Email,
+		&i.Username,
 		&i.AvatarUrl,
+		&i.AboutMe,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
