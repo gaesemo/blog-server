@@ -5,27 +5,41 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"time"
 
 	"connectrpc.com/connect"
 	authv1 "github.com/gaesemo/tech-blog-api/go/service/auth/v1"
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
 	typesv1 "github.com/gaesemo/tech-blog-api/go/types/v1"
-	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/endpoints"
 )
 
-var _ authv1connect.AuthServiceHandler = (*authServiceHandler)(nil)
+var _ authv1connect.AuthServiceHandler = (*service)(nil)
 
-func New(logger *slog.Logger, opts ...OAuth2ConfigOption) authv1connect.AuthServiceHandler {
-	hdlr := &authServiceHandler{
-		logger:        logger,
+func New(
+	logger *slog.Logger,
+	db *pgx.Conn,
+	timeNow func() time.Time,
+	randStr func() string,
+	oauth2Options ...OAuth2ConfigOption,
+) authv1connect.AuthServiceHandler {
+	svc := &service{
+		logger: logger,
+
+		db:            db,
 		oauth2Configs: map[string]*oauth2.Config{},
+
+		timeNow: timeNow,
+		randStr: randStr,
 	}
-	for _, opt := range opts {
-		opt(hdlr.oauth2Configs)
+
+	for _, opt := range oauth2Options {
+		opt(svc.oauth2Configs)
 	}
-	return hdlr
+
+	return svc
 }
 
 const (
@@ -39,7 +53,7 @@ func WithGitHubOAuth2(config *oauth2.Config) OAuth2ConfigOption {
 	return func(cfgs map[string]*oauth2.Config) {
 		_, exists := cfgs[github]
 		if exists {
-			slog.Warn("oauth2 config overrided", slog.Any(github, config))
+			slog.Warn("oauth2 config will be overrided", slog.Any(github, config))
 		}
 		cfgs[github] = config
 	}
@@ -49,18 +63,23 @@ func WithOAuth2(provider string, config *oauth2.Config) OAuth2ConfigOption {
 	return func(cfgs map[string]*oauth2.Config) {
 		_, exists := cfgs[provider]
 		if exists {
-			slog.Warn("oauth2 config overrided", slog.Any(provider, config))
+			slog.Warn("oauth2 config will be overrided", slog.Any(provider, config))
 		}
 		cfgs[provider] = config
 	}
 }
 
-type authServiceHandler struct {
-	logger        *slog.Logger
+type service struct {
+	logger *slog.Logger
+
+	db            *pgx.Conn
 	oauth2Configs map[string]*oauth2.Config
+
+	timeNow func() time.Time
+	randStr func() string
 }
 
-func (svc *authServiceHandler) GetAuthURL(ctx context.Context, req *connect.Request[authv1.GetAuthURLRequest]) (*connect.Response[authv1.GetAuthURLResponse], error) {
+func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.GetAuthURLRequest]) (*connect.Response[authv1.GetAuthURLResponse], error) {
 
 	identityProvider := req.Msg.IdentityProvider
 	redirectUrl := req.Msg.RedirectUrl
@@ -81,7 +100,7 @@ func (svc *authServiceHandler) GetAuthURL(ctx context.Context, req *connect.Requ
 			}
 			query.Set("redirect_uri", *redirectUrl)
 		}
-		query.Add("state", uuid.New().String())
+		query.Add("state", svc.randStr())
 		authUrl, err := url.JoinPath(endpoints.GitHub.AuthURL, query.Encode())
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("getting GitHub auth url: %v", err))
@@ -96,11 +115,11 @@ func (svc *authServiceHandler) GetAuthURL(ctx context.Context, req *connect.Requ
 	}
 }
 
-func (h *authServiceHandler) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
+func (h *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
 	return nil, nil
 }
 
-func (h *authServiceHandler) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
+func (h *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
 	return nil, nil
 }
 

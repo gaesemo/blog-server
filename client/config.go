@@ -5,15 +5,38 @@ import (
 	"time"
 )
 
-type Option func(*Config)
+type ConfigOption func(*Config)
 
-func WithHTTPClient(client *http.Client) Option {
+type Config struct {
+	BaseURL    string
+	HTTPClient *http.Client
+}
+
+const (
+	BaseUrl           = "http://localhost:8080"
+	ConnectionTimeout = 10 * time.Second
+)
+
+func NewConfig(opts ...ConfigOption) *Config {
+	config := &Config{
+		BaseURL:    BaseUrl,
+		HTTPClient: &http.Client{Timeout: ConnectionTimeout},
+	}
+
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	return config
+}
+
+func WithHTTPClient(client *http.Client) ConfigOption {
 	return func(c *Config) {
 		c.HTTPClient = client
 	}
 }
 
-func WithTimeout(timeout time.Duration) Option {
+func WithTimeout(timeout time.Duration) ConfigOption {
 	return func(c *Config) {
 		if c.HTTPClient == nil {
 			c.HTTPClient = &http.Client{}
@@ -22,21 +45,8 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
-func WithBaseURL(baseURL string) Option {
+func WithBaseURL(baseURL string) ConfigOption {
 	return func(c *Config) {
 		c.BaseURL = baseURL
 	}
-}
-
-func NewConfig(opts ...Option) *Config {
-	config := &Config{
-		BaseURL:    "http://localhost:8080",
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
-	}
-
-	for _, opt := range opts {
-		opt(config)
-	}
-
-	return config
 }

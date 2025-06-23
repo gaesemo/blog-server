@@ -22,13 +22,13 @@ var rootCmd = &cobra.Command{
 	Short:   "gaesemo tech-blog-server",
 }
 
+func init() {
+	rootCmd.AddCommand(serveCmd)
+}
+
 func ExecuteWithContext(ctx context.Context) {
 	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func init() {
-	rootCmd.AddCommand(serveCmd)
 }

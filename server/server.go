@@ -2,106 +2,92 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
+	"strconv"
 	"time"
 
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
 	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
+	"github.com/jackc/pgx/v5"
+	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/endpoints"
+	"golang.org/x/sync/errgroup"
 )
 
-type app struct {
-	port   string
-	logger *slog.Logger
+// interface - type - const - var - new func - public receiver func - private receiver func - public func - private func
+
+type Server struct {
+	port uint16
+	db   *pgx.Conn
+	// objstorage
 }
 
-type Option func(*app)
-
-func New(opts ...Option) *app {
-	svr := &app{
-		port: "8080",
-		logger: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     slog.LevelInfo,
-			AddSource: true,
-		})),
-	}
-
-	for _, opt := range opts {
-		opt(svr)
-	}
-	return svr
-}
-func WithPort(port string) Option {
-	return func(a *app) {
-		a.port = port
-	}
-}
-func WithLogger(logger *slog.Logger) Option {
-	return func(a *app) {
-		a.logger = logger
+func New(logger *slog.Logger, port uint16, db *pgx.Conn) *Server {
+	return &Server{
+		port: port,
+		db:   db,
 	}
 }
 
-func (a *app) Serve(ctx context.Context) error {
+func (s *Server) Serve(ctx context.Context) error {
+	timeNow := func() time.Time {
+		return time.Time{}
+	}
+	randStr := func() string {
+		return "some-randomized-string"
+	}
+
 	auth := authsvc.New(
-		a.logger,
+		slog.Default(),
+		s.db,    // db
+		timeNow, // timeNow
+		randStr, // randStr
 		authsvc.WithGitHubOAuth2(&oauth2.Config{
-			ClientID:     os.Getenv("GITHUB_OAUTH2_CLIENT_ID"),
-			ClientSecret: os.Getenv("GITHUB_OAUTH2_CLIENT_SECRET"),
+			ClientID:     viper.GetString("AUTH_GITHUB_CLIENT_ID"),
+			ClientSecret: viper.GetString("AUTH_GITHUB_CLIENT_SECRET"),
 			Endpoint:     endpoints.GitHub,
-			RedirectURL:  os.Getenv("GITHUB_OAUTH2_DEFAULT_CALLBACK_URL"),
+			RedirectURL:  viper.GetString("AUTH_GITHUB_CALLBACK_URL"),
 			Scopes:       []string{"user"}, // https://docs.github.com/ko/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes
 		}))
-	path, handler := authv1connect.NewAuthServiceHandler(auth)
+
+	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
 
 	mux := http.NewServeMux()
-	mux.Handle(path, handler)
+	mux.Handle(path, handler) // TODO: add middlewares e.g. panic recoverer, request logger
 
+	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
-		Addr:    ":" + a.port,
+		Addr:    addr, // :port
 		Handler: mux,
 	}
-	serverShutdownCallbacks := []func(){
-		func() {
-			slog.Info("gracefully shutting down x...")
-		},
-		func() {
-			slog.Info("gracefully shutting down y...")
-		},
-		func() {
-			slog.Info("gracefully shutting down z...")
-		},
-	}
-	for _, callback := range serverShutdownCallbacks {
-		server.RegisterOnShutdown(callback)
-	}
 
-	slog.InfoContext(ctx, "starting server...", slog.String("port", a.port))
-
-	// Start server in a goroutine
-	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			slog.ErrorContext(ctx, "server error", slog.Any("error", err))
+	eg, ctx := errgroup.WithContext(ctx)
+	onShutdown := func() error {
+		<-ctx.Done()
+		err := server.Shutdown(ctx)
+		if err != nil {
+			return fmt.Errorf("shutting down http server: %v", err)
 		}
-	}()
+		return nil
+	}
+	eg.Go(onShutdown)
 
-	// Wait for context cancellation
-	<-ctx.Done()
-	slog.InfoContext(ctx, "context got cancelled")
-	slog.InfoContext(ctx, "shutting down server...")
-
-	// Graceful shutdown with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.ErrorContext(ctx, "gracefully shutting down server", slog.Any("error", err))
+	serve := func() error {
+		slog.InfoContext(ctx, "start server", slog.String("address", server.Addr))
+		err := server.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
 		return err
 	}
+	eg.Go(serve)
 
-	slog.InfoContext(ctx, "server stopped...")
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("server stopped: %v", err)
+	}
 	return nil
 }
