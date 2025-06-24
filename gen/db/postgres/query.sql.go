@@ -7,7 +7,89 @@ package postgres
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (
+    identity_provider,
+    email,
+    username,
+    avatar_url,
+    about_me,
+    created_at,
+    updated_at
+) VALUES (
+    $1,$2,$3,$4,$5,$6,$7
+)
+RETURNING id, identity_provider, email, username, avatar_url, about_me, created_at, updated_at, deleted_at
+`
+
+type CreateUserParams struct {
+	IdentityProvider string
+	Email            string
+	Username         string
+	AvatarUrl        string
+	AboutMe          string
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.IdentityProvider,
+		arg.Email,
+		arg.Username,
+		arg.AvatarUrl,
+		arg.AboutMe,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.IdentityProvider,
+		&i.Email,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.AboutMe,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const getUserByEmailAndIDP = `-- name: GetUserByEmailAndIDP :one
+SELECT id, identity_provider, email, username, avatar_url, about_me, created_at, updated_at, deleted_at
+FROM users
+WHERE deleted_at IS NULL
+AND email = $1
+AND identity_provider = $2
+`
+
+type GetUserByEmailAndIDPParams struct {
+	Email            string
+	IdentityProvider string
+}
+
+func (q *Queries) GetUserByEmailAndIDP(ctx context.Context, arg GetUserByEmailAndIDPParams) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmailAndIDP, arg.Email, arg.IdentityProvider)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.IdentityProvider,
+		&i.Email,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.AboutMe,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
 
 const getUserById = `-- name: GetUserById :one
 SELECT id, identity_provider, email, username, avatar_url, about_me, created_at, updated_at, deleted_at 

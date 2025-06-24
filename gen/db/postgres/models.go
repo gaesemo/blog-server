@@ -8,19 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Follow struct {
-	FollowerID  int64
-	FollowingID int64
-	StartedAt   pgtype.Timestamptz
-}
-
-type Subscription struct {
-	SubscriberID int64
-	PublisherID  int64
-	StartedAt    pgtype.Timestamptz
-	ExpiresAt    pgtype.Timestamptz
-}
-
 type User struct {
 	ID               int64
 	IdentityProvider string

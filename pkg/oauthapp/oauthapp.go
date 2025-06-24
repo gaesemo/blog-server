@@ -1,5 +1,7 @@
 package oauthapp
 
+import "strings"
+
 type OAuthApp interface {
 	GetAuthURL(option *GetAuthURLOption) (string, error)
 	ExchangeCode(code string, option *ExchangeCodeOption) (string, error)
@@ -17,4 +19,8 @@ type ExchangeCodeOption struct {
 type UserProfile struct {
 	Email     string
 	AvatarURL string
+}
+
+func (p UserProfile) TempName() string {
+	return strings.Split(p.Email, "@")[0]
 }
