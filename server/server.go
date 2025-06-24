@@ -10,11 +10,9 @@ import (
 	"time"
 
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
+	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
 	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
 	"github.com/jackc/pgx/v5"
-	"github.com/spf13/viper"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/endpoints"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -41,18 +39,15 @@ func (s *Server) Serve(ctx context.Context) error {
 		return "some-randomized-string"
 	}
 
+	httpClient := &http.Client{Timeout: 10 * time.Second}
 	auth := authsvc.New(
 		slog.Default(),
-		s.db,    // db
+		s.db, // db
+		httpClient,
 		timeNow, // timeNow
 		randStr, // randStr
-		authsvc.WithGitHubOAuth2(&oauth2.Config{
-			ClientID:     viper.GetString("AUTH_GITHUB_CLIENT_ID"),
-			ClientSecret: viper.GetString("AUTH_GITHUB_CLIENT_SECRET"),
-			Endpoint:     endpoints.GitHub,
-			RedirectURL:  viper.GetString("AUTH_GITHUB_CALLBACK_URL"),
-			Scopes:       []string{"user"}, // https://docs.github.com/ko/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes
-		}))
+		authsvc.WithGitHubOAuthApp(oauthapp.NewGitHub(httpClient, randStr)),
+	)
 
 	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
 

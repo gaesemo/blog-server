@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/url"
+	"net/http"
 	"time"
 
 	"connectrpc.com/connect"
 	authv1 "github.com/gaesemo/tech-blog-api/go/service/auth/v1"
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
 	typesv1 "github.com/gaesemo/tech-blog-api/go/types/v1"
+	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/endpoints"
 )
 
 var _ authv1connect.AuthServiceHandler = (*service)(nil)
@@ -21,22 +20,24 @@ var _ authv1connect.AuthServiceHandler = (*service)(nil)
 func New(
 	logger *slog.Logger,
 	db *pgx.Conn,
+	httpClient *http.Client,
 	timeNow func() time.Time,
 	randStr func() string,
-	oauth2Options ...OAuth2ConfigOption,
+	opts ...OAuthAppOption,
 ) authv1connect.AuthServiceHandler {
 	svc := &service{
 		logger: logger,
 
-		db:            db,
-		oauth2Configs: map[string]*oauth2.Config{},
+		db:         db,
+		httpClient: httpClient,
+		oauthApps:  map[string]oauthapp.OAuthApp{},
 
 		timeNow: timeNow,
 		randStr: randStr,
 	}
 
-	for _, opt := range oauth2Options {
-		opt(svc.oauth2Configs)
+	for _, o := range opts {
+		o(svc.oauthApps)
 	}
 
 	return svc
@@ -47,33 +48,14 @@ const (
 	google = "google"
 )
 
-type OAuth2ConfigOption func(cfgs map[string]*oauth2.Config)
-
-func WithGitHubOAuth2(config *oauth2.Config) OAuth2ConfigOption {
-	return func(cfgs map[string]*oauth2.Config) {
-		_, exists := cfgs[github]
-		if exists {
-			slog.Warn("oauth2 config will be overrided", slog.Any(github, config))
-		}
-		cfgs[github] = config
-	}
-}
-
-func WithOAuth2(provider string, config *oauth2.Config) OAuth2ConfigOption {
-	return func(cfgs map[string]*oauth2.Config) {
-		_, exists := cfgs[provider]
-		if exists {
-			slog.Warn("oauth2 config will be overrided", slog.Any(provider, config))
-		}
-		cfgs[provider] = config
-	}
-}
+type OAuthAppOption func(cfgs map[string]oauthapp.OAuthApp)
 
 type service struct {
 	logger *slog.Logger
 
-	db            *pgx.Conn
-	oauth2Configs map[string]*oauth2.Config
+	db         *pgx.Conn
+	httpClient *http.Client
+	oauthApps  map[string]oauthapp.OAuthApp
 
 	timeNow func() time.Time
 	randStr func() string
@@ -84,57 +66,79 @@ func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.
 	identityProvider := req.Msg.IdentityProvider
 	redirectUrl := req.Msg.RedirectUrl
 
+	oauthApp, err := svc.getOAuthApp(identityProvider)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	authURL, err := oauthApp.GetAuthURL(&oauthapp.GetAuthURLOption{
+		RedirectURL: redirectUrl,
+	})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&authv1.GetAuthURLResponse{
+		AuthUrl: authURL,
+	}), nil
+}
+
+func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
+	identityProvider := req.Msg.IdentityProvider
+	code := req.Msg.AuthCode
+
+	oauthApp, err := svc.getOAuthApp(identityProvider)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	accessToken, err := oauthApp.ExchangeCode(code, nil)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	profile, err := oauthApp.GetUserProfile(accessToken)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	slog.InfoContext(ctx, "user profile", slog.String("email", profile.Email), slog.String("avatar", profile.AvatarURL))
+
+	return nil, nil
+}
+
+func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
+	return nil, nil
+}
+
+func (svc *service) getOAuthApp(identityProvider typesv1.IdentityProvider) (oauthapp.OAuthApp, error) {
 	switch identityProvider {
 	case typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB:
-		githubConfig := svc.oauth2Configs[github]
-		if githubConfig == nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("unsupported identity provider: %s", typesv1.IdentityProvider_name[int32(identityProvider)]))
+		oa, exist := svc.oauthApps[github]
+		if !exist {
+			return nil, fmt.Errorf("unsupported identity provider: github")
 		}
-		query := url.Values{}
-		query.Add("client_id", githubConfig.ClientID)
-		query.Add("redirect_uri", githubConfig.RedirectURL) // add default redirect uri
-		if redirectUrl != nil {
-			if ok, err := isValidRedirectUrl(githubConfig.RedirectURL, *redirectUrl); !ok {
-				svc.logger.ErrorContext(ctx, "invalid redirect url", slog.String("redirect_url", *redirectUrl), slog.Any("error", err))
-				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid redirect url: %v", err))
-			}
-			query.Set("redirect_uri", *redirectUrl)
-		}
-		query.Add("state", svc.randStr())
-		authUrl, err := url.JoinPath(endpoints.GitHub.AuthURL, query.Encode())
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("getting GitHub auth url: %v", err))
-		}
-		return connect.NewResponse(&authv1.GetAuthURLResponse{
-			AuthUrl: authUrl,
-		}), nil
+		return oa, nil
 	case typesv1.IdentityProvider_IDENTITY_PROVIDER_UNSPECIFIED:
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("identity provider must be specified"))
+		return nil, fmt.Errorf("identity provider unspecified")
 	default:
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("unsupported identity provider: %s", typesv1.IdentityProvider_name[int32(identityProvider)]))
+		return nil, fmt.Errorf("unsupported identity provider")
 	}
 }
 
-func (h *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
-	return nil, nil
+func WithGitHubOAuthApp(app oauthapp.OAuthApp) OAuthAppOption {
+	return func(oa map[string]oauthapp.OAuthApp) {
+		_, exists := oa[github]
+		if !exists {
+			oa[github] = app
+		}
+	}
 }
 
-func (h *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
-	return nil, nil
-}
-
-func isValidRedirectUrl(defaultRedirectUrl, redirectUrl string) (bool, error) {
-	d, err := url.Parse(defaultRedirectUrl)
-	if err != nil {
-		return false, fmt.Errorf("parsing url %q", defaultRedirectUrl)
+func WithOAuthApp(provider string, app oauthapp.OAuthApp) OAuthAppOption {
+	return func(oa map[string]oauthapp.OAuthApp) {
+		_, exists := oa[provider]
+		if !exists {
+			oa[provider] = app
+		}
 	}
-	r, err := url.Parse(redirectUrl)
-	if err != nil {
-		return false, fmt.Errorf("parsing url %q", redirectUrl)
-	}
-
-	if d.Host != r.Host {
-		return false, fmt.Errorf("host, port must be same as default redirect url's: %q != %q (default)", r.Host, d.Host)
-	}
-	return true, nil
 }
