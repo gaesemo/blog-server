@@ -14,6 +14,7 @@ import (
 	typesv1 "github.com/gaesemo/tech-blog-api/go/types/v1"
 	"github.com/gaesemo/tech-blog-server/gen/db/postgres"
 	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
+	"github.com/gaesemo/tech-blog-server/pkg/transaction"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -22,22 +23,20 @@ var _ authv1connect.AuthServiceHandler = (*service)(nil)
 
 func New(
 	logger *slog.Logger,
-	db *pgx.Conn,
-	queries *postgres.Queries,
 	httpClient *http.Client,
+	db *pgx.Conn,
 	timeNow func() time.Time,
 	randStr func() string,
 	opts ...OAuthAppOption,
 ) authv1connect.AuthServiceHandler {
 	svc := &service{
-		logger: logger,
-
-		db:         db,
+		logger:     logger,
 		httpClient: httpClient,
+		db:         db,
+		queries:    postgres.New(db),
+		timeNow:    timeNow,
+		randStr:    randStr,
 		oauthApps:  map[string]oauthapp.OAuthApp{},
-
-		timeNow: timeNow,
-		randStr: randStr,
 	}
 
 	for _, o := range opts {
@@ -55,15 +54,13 @@ const (
 type OAuthAppOption func(cfgs map[string]oauthapp.OAuthApp)
 
 type service struct {
-	logger *slog.Logger
-
+	logger     *slog.Logger
 	db         *pgx.Conn
 	queries    *postgres.Queries
 	httpClient *http.Client
 	oauthApps  map[string]oauthapp.OAuthApp
-
-	timeNow func() time.Time
-	randStr func() string
+	timeNow    func() time.Time
+	randStr    func() string
 }
 
 func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.GetAuthURLRequest]) (*connect.Response[authv1.GetAuthURLResponse], error) {
@@ -107,49 +104,40 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	// start db io
-	tx, err := svc.db.BeginTx(ctx, pgx.TxOptions{
-		IsoLevel:   pgx.RepeatableRead,
-		AccessMode: pgx.ReadWrite,
-	})
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
+	tx := transaction.New[postgres.User](
+		svc.db,
+		pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadWrite},
+		svc.queries,
+	)
 
-	q := svc.queries.WithTx(tx)
-	user, err := q.GetUserByEmailAndIDP(ctx, postgres.GetUserByEmailAndIDPParams{
-		Email:            profile.Email,
-		IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
-	})
-	if err == nil {
-		slog.InfoContext(ctx, "user", slog.Int64("id", user.ID))
-		// TODO: make jwt, session
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = nil
-		user, err = q.CreateUser(ctx, postgres.CreateUserParams{
-			IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
+	user, txErr := tx.Exec(ctx, func(c context.Context, q *postgres.Queries) (*postgres.User, error) {
+		u, err := q.GetUserByEmailAndIDP(ctx, postgres.GetUserByEmailAndIDPParams{
 			Email:            profile.Email,
-			Username:         profile.TempName(),
-			AvatarUrl:        profile.AvatarURL,
-			AboutMe:          "",
-			CreatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
-			UpdatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
+			IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
 		})
-		if err != nil {
-			rbErr := tx.Rollback(ctx)
-			if rbErr != nil {
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("creating user: %v: %v", err, rbErr))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("creating user: %v", err))
+		if err == nil {
+			return &u, nil
 		}
-		// TODO: make jwt, session
+		if errors.Is(err, pgx.ErrNoRows) {
+			u, err := q.CreateUser(ctx, postgres.CreateUserParams{
+				IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
+				Email:            profile.Email,
+				Username:         profile.TempName(),
+				AvatarUrl:        profile.AvatarURL,
+				AboutMe:          "",
+				CreatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
+				UpdatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
+			})
+			return &u, err
+		}
+		return nil, err
+	})
+	if txErr != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("executing tx: %v", txErr))
 	}
-	rbErr := tx.Rollback(ctx)
-	if rbErr != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("log in: %v: %v", err, rbErr))
-	}
-	return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("log in: %v", err))
+	slog.InfoContext(ctx, "user", slog.Int64("id", user.ID))
+	// TODO: issue jwt token, create new session
+	return nil, nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {

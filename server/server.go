@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
-	"github.com/gaesemo/tech-blog-server/gen/db/postgres"
 	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
 	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
 	"github.com/jackc/pgx/v5"
@@ -41,16 +40,14 @@ func (s *Server) Serve(ctx context.Context) error {
 	}
 
 	db := s.db
-	queries := postgres.New(db)
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 
 	auth := authsvc.New(
 		slog.Default(),
-		db,
-		queries,
 		httpClient,
-		timeNow, // timeNow
-		randStr, // randStr
+		db,
+		timeNow,
+		randStr,
 		authsvc.WithGitHubOAuthApp(oauthapp.NewGitHub(httpClient, randStr)),
 	)
 
