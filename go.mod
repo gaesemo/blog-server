@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	connectrpc.com/connect v1.18.1
-	github.com/gaesemo/tech-blog-api/go v0.0.0-20250615070926-61e3b69118a6
+	github.com/gaesemo/tech-blog-api/go v0.0.0-20250625125543-7a1b4dc33a0d
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
@@ -91,4 +91,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/gaesemo/tech-blog-api/go => ../tech-blog-api/go
+// use only for the local test
+// replace github.com/gaesemo/tech-blog-api/go => ../tech-blog-api/go
