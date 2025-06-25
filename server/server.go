@@ -13,6 +13,7 @@ import (
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
 	"github.com/gaesemo/tech-blog-server/pkg/oauth"
 	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
 )
@@ -36,10 +37,10 @@ func New(logger *slog.Logger, port uint16, db *pgx.Conn) *Server {
 
 func (s *Server) Serve(ctx context.Context) error {
 	timeNow := func() time.Time {
-		return time.Time{}
+		return time.Now().UTC()
 	}
 	randStr := func() string {
-		return "some-randomized-string"
+		return uuid.NewString()
 	}
 
 	db := s.db
