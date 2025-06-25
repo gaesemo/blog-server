@@ -1,5 +1,7 @@
 Dockerfile
+
 # directory
+db/
 script/
 client/
 

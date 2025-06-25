@@ -1,4 +1,4 @@
-FROM golang:1.24.2-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -13,13 +13,10 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -a -installsuffix cgo -o gsm .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o gsm .
 
 # Final stage
 FROM alpine:3.19
-
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
