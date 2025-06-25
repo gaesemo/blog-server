@@ -1,4 +1,15 @@
 Dockerfile
-*.env
+# directory
+script/
+client/
+
+# git
 .git/
 .gitignore
+
+# doc
+LICENSE
+*.md
+
+# configs
+sqlc.yaml
