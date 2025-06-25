@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
-	"github.com/gaesemo/tech-blog-api/go/service/user/v1/userv1connect"
+	"github.com/gaesemo/blog-api/go/service/auth/v1/authv1connect"
+	"github.com/gaesemo/blog-api/go/service/user/v1/userv1connect"
 )
 
 type Option func(*Client)

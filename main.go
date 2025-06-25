@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gaesemo/tech-blog-server/cmd"
+	"github.com/gaesemo/blog-server/cmd"
 )
 
 func main() {

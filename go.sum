@@ -40,8 +40,8 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/8M=
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
-github.com/gaesemo/tech-blog-api/go v0.0.0-20250625125543-7a1b4dc33a0d h1:IwNttKeShAJDwzeae+eriMBhyAwtRj/4ySt/6xt1Rvo=
-github.com/gaesemo/tech-blog-api/go v0.0.0-20250625125543-7a1b4dc33a0d/go.mod h1:/JP5HhR7DlMjaPLc1v6TXhkJ6/We0iJ2AuWxL/tgGYs=
+github.com/gaesemo/blog-api/go v0.0.0-20250625135930-b7db604db8b5 h1:cAM2Fv0qU5HLxk1AeI0vLJGGLWf4Mt6iR67biJcrAiU=
+github.com/gaesemo/blog-api/go v0.0.0-20250625135930-b7db604db8b5/go.mod h1:xgt6AcLGbIfivA2YnI41CgZ6jXjY6ngi2LDrMEZ7M1A=
 github.com/go-ini/ini v1.67.0 h1:z6ZrTEZqSWOTyH2FlglNbNgARyHG8oLW9gMELqKr06A=
 github.com/go-ini/ini v1.67.0/go.mod h1:ByCAeIL28uOIIG0E3PJtZPDL8WnHpFKFOtgjp+3Ies8=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=

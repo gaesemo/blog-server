@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
-	"github.com/gaesemo/tech-blog-server/pkg/oauth"
-	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
+	"github.com/gaesemo/blog-api/go/service/auth/v1/authv1connect"
+	"github.com/gaesemo/blog-server/pkg/oauth"
+	authsvc "github.com/gaesemo/blog-server/service/auth/v1"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"

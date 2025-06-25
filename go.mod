@@ -1,10 +1,9 @@
-module github.com/gaesemo/tech-blog-server
+module github.com/gaesemo/blog-server
 
 go 1.24.3
 
 require (
 	connectrpc.com/connect v1.18.1
-	github.com/gaesemo/tech-blog-api/go v0.0.0-20250625125543-7a1b4dc33a0d
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.5
@@ -16,6 +15,8 @@ require (
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.15.0
 )
+
+require github.com/gaesemo/blog-api/go v0.0.0-20250625135930-b7db604db8b5
 
 require (
 	connectrpc.com/authn v0.2.0

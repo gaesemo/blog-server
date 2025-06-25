@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gaesemo/tech-blog-server/gen/db/postgres"
+	"github.com/gaesemo/blog-server/gen/db/postgres"
 	"github.com/jackc/pgx/v5"
 )
 

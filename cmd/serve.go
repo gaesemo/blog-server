@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/gaesemo/tech-blog-server/config"
-	"github.com/gaesemo/tech-blog-server/server"
+	"github.com/gaesemo/blog-server/config"
+	"github.com/gaesemo/blog-server/server"
 	"github.com/jackc/pgx/v5"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
