@@ -1,4 +1,4 @@
-package oauthapp
+package oauth
 
 import (
 	"fmt"
@@ -12,11 +12,11 @@ import (
 	"golang.org/x/oauth2/endpoints"
 )
 
-var _ OAuthApp = (*github)(nil)
+var _ App = (*github)(nil)
 
-func NewGitHub(httpClient *http.Client, randStr func() string) OAuthApp {
-	if randStr == nil {
-		randStr = func() string {
+func NewGitHub(httpClient *http.Client, randStrFunc func() string) App {
+	if randStrFunc == nil {
+		randStrFunc = func() string {
 			return uuid.NewString()
 		}
 	}
@@ -28,24 +28,16 @@ func NewGitHub(httpClient *http.Client, randStr func() string) OAuthApp {
 			RedirectURL:  viper.GetString("OAUTH_GITHUB_CALLBACK_URL"),
 			Scopes:       []string{"user"}, // https://docs.github.com/ko/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes
 		},
-		randStr:    randStr,
-		httpClient: httpClient,
+		randStrFunc: randStrFunc,
+		httpClient:  httpClient,
 	}
 }
 
 type github struct {
-	config     *oauth2.Config
-	httpClient *http.Client
-	randStr    func() string
+	config      *oauth2.Config
+	httpClient  *http.Client
+	randStrFunc func() string
 }
-
-// query params
-// "client_id"
-// "client_secret"
-// "code"
-// "state"
-// "scope"
-// "redirect_uri"
 
 // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#1-request-a-users-github-identity
 func (g *github) GetAuthURL(option *GetAuthURLOption) (string, error) {
@@ -63,7 +55,7 @@ func (g *github) GetAuthURL(option *GetAuthURLOption) (string, error) {
 		params.Add("redirect_uri", r)
 	}
 	params.Add("scope", strings.Join(g.config.Scopes, " "))
-	params.Add("state", g.randStr())
+	params.Add("state", g.randStrFunc())
 	authUrl := g.config.Endpoint.AuthURL + "?" + params.Encode()
 	return authUrl, nil
 }

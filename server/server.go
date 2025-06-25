@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
-	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
+	"github.com/gaesemo/tech-blog-server/pkg/oauth"
 	authsvc "github.com/gaesemo/tech-blog-server/service/auth/v1"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/sync/errgroup"
@@ -48,7 +48,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		db,
 		timeNow,
 		randStr,
-		authsvc.WithGitHubOAuthApp(oauthapp.NewGitHub(httpClient, randStr)),
+		authsvc.WithGitHubOAuthApp(oauth.NewGitHub(httpClient, randStr)),
 	)
 
 	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,

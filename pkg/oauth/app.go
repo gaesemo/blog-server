@@ -1,8 +1,8 @@
-package oauthapp
+package oauth
 
 import "strings"
 
-type OAuthApp interface {
+type App interface {
 	GetAuthURL(option *GetAuthURLOption) (string, error)
 	ExchangeCode(code string, option *ExchangeCodeOption) (string, error)
 	GetUserProfile(accessToken string) (UserProfile, error)

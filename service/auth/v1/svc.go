@@ -13,7 +13,7 @@ import (
 	"github.com/gaesemo/tech-blog-api/go/service/auth/v1/authv1connect"
 	typesv1 "github.com/gaesemo/tech-blog-api/go/types/v1"
 	"github.com/gaesemo/tech-blog-server/gen/db/postgres"
-	"github.com/gaesemo/tech-blog-server/pkg/oauthapp"
+	"github.com/gaesemo/tech-blog-server/pkg/oauth"
 	"github.com/gaesemo/tech-blog-server/pkg/transaction"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -36,7 +36,7 @@ func New(
 		queries:    postgres.New(db),
 		timeNow:    timeNow,
 		randStr:    randStr,
-		oauthApps:  map[string]oauthapp.OAuthApp{},
+		oauthApps:  map[string]oauth.App{},
 	}
 
 	for _, o := range opts {
@@ -51,14 +51,14 @@ const (
 	google = "google"
 )
 
-type OAuthAppOption func(cfgs map[string]oauthapp.OAuthApp)
+type OAuthAppOption func(cfgs map[string]oauth.App)
 
 type service struct {
 	logger     *slog.Logger
 	db         *pgx.Conn
 	queries    *postgres.Queries
 	httpClient *http.Client
-	oauthApps  map[string]oauthapp.OAuthApp
+	oauthApps  map[string]oauth.App
 	timeNow    func() time.Time
 	randStr    func() string
 }
@@ -73,7 +73,7 @@ func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	authURL, err := oauthApp.GetAuthURL(&oauthapp.GetAuthURLOption{
+	authURL, err := oauthApp.GetAuthURL(&oauth.GetAuthURLOption{
 		RedirectURL: redirectUrl,
 	})
 	if err != nil {
@@ -94,7 +94,7 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	accessToken, err := oauthApp.ExchangeCode(code, &oauthapp.ExchangeCodeOption{RedirectURL: redirectURL})
+	accessToken, err := oauthApp.ExchangeCode(code, &oauth.ExchangeCodeOption{RedirectURL: redirectURL})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -144,7 +144,7 @@ func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.Logo
 	return nil, nil
 }
 
-func (svc *service) getOAuthApp(identityProvider typesv1.IdentityProvider) (oauthapp.OAuthApp, error) {
+func (svc *service) getOAuthApp(identityProvider typesv1.IdentityProvider) (oauth.App, error) {
 	switch identityProvider {
 	case typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB:
 		oa, exist := svc.oauthApps[github]
@@ -159,8 +159,8 @@ func (svc *service) getOAuthApp(identityProvider typesv1.IdentityProvider) (oaut
 	}
 }
 
-func WithGitHubOAuthApp(app oauthapp.OAuthApp) OAuthAppOption {
-	return func(oa map[string]oauthapp.OAuthApp) {
+func WithGitHubOAuthApp(app oauth.App) OAuthAppOption {
+	return func(oa map[string]oauth.App) {
 		_, exists := oa[github]
 		if !exists {
 			oa[github] = app
@@ -168,8 +168,8 @@ func WithGitHubOAuthApp(app oauthapp.OAuthApp) OAuthAppOption {
 	}
 }
 
-func WithOAuthApp(provider string, app oauthapp.OAuthApp) OAuthAppOption {
-	return func(oa map[string]oauthapp.OAuthApp) {
+func WithOAuthApp(provider string, app oauth.App) OAuthAppOption {
+	return func(oa map[string]oauth.App) {
 		_, exists := oa[provider]
 		if !exists {
 			oa[provider] = app
