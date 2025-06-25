@@ -18,6 +18,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/spf13/viper"
 )
 
 type AuthService interface {
@@ -134,15 +135,21 @@ func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL
 	if txErr != nil {
 		return "", fmt.Errorf("internal: %v", err)
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user": user.ID,
-		"ttl":  svc.timeNow().Add(time.Hour).Unix(),
+		"iss": "gsm",
+		"iat": jwt.NewNumericDate(svc.timeNow()),
+		"exp": jwt.NewNumericDate(svc.timeNow().Add(time.Hour)),
+		"nbf": jwt.NewNumericDate(svc.timeNow()),
+		"uid": user.ID,
+		"unm": user.Username,
+		"ava": user.AvatarUrl,
 	})
-	gsmAuthToken, err := token.SignedString("some-secret")
+	authToken, err := token.SignedString(viper.GetString("JWT_SIGNING_SECRET"))
 	if err != nil {
 		return "", fmt.Errorf("internal: %v", err)
 	}
-	return gsmAuthToken, nil
+	return authToken, nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {

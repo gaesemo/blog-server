@@ -25,7 +25,7 @@ func NewGitHub(httpClient *http.Client, randStrFunc func() string) App {
 			ClientID:     viper.GetString("OAUTH_GITHUB_CLIENT_ID"),
 			ClientSecret: viper.GetString("OAUTH_GITHUB_CLIENT_SECRET"),
 			Endpoint:     endpoints.GitHub,
-			RedirectURL:  viper.GetString("OAUTH_GITHUB_CALLBACK_URL"),
+			RedirectURL:  viper.GetString("OAUTH_GITHUB_REDIRECT_URL"),
 			Scopes:       []string{"user"}, // https://docs.github.com/ko/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps#available-scopes
 		},
 		randStrFunc: randStrFunc,
