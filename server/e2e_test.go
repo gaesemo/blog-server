@@ -95,19 +95,7 @@ func setUp(ctx context.Context) (*pgx.Conn, []cleanUpFunc, error) {
 		tcpg.WithUsername(viper.GetString("RDB_USER")),
 		tcpg.WithPassword(viper.GetString("RDB_PASSWORD")),
 		tcpg.WithDatabase(viper.GetString("RDB_DATABASE")),
-		tcpg.WithInitScripts(`
-CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
-    identity_provider TEXT NOT NULL,
-    email TEXT NOT NULL,
-    username TEXT NOT NULL,
-    avatar_url TEXT NOT NULL,
-    about_me VARCHAR(255) NOT NULL DEFAULT '',
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL, -- soft delete
-    UNIQUE (email, identity_provider)
-);`),
+		tcpg.WithInitScripts("../db/postgres/schema.sql"),
 		// TODO: initial schema set up
 		// TODO: test data setup
 		tcpg.BasicWaitStrategies(),
