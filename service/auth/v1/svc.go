@@ -15,11 +15,17 @@ import (
 	"github.com/gaesemo/tech-blog-server/gen/db/postgres"
 	"github.com/gaesemo/tech-blog-server/pkg/oauth"
 	"github.com/gaesemo/tech-blog-server/pkg/transaction"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-var _ authv1connect.AuthServiceHandler = (*service)(nil)
+type AuthService interface {
+	authv1connect.AuthServiceHandler
+	GitHubCallback(ctx context.Context, code string, redirectURL string) (string, error)
+}
+
+var _ AuthService = (*service)(nil)
 
 func New(
 	logger *slog.Logger,
@@ -28,7 +34,7 @@ func New(
 	timeNow func() time.Time,
 	randStr func() string,
 	opts ...OAuthAppOption,
-) authv1connect.AuthServiceHandler {
+) AuthService {
 	svc := &service{
 		logger:     logger,
 		httpClient: httpClient,
@@ -84,24 +90,17 @@ func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.
 	}), nil
 }
 
-func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
-	identityProvider := req.Msg.IdentityProvider
-	code := req.Msg.AuthCode
-	redirectURL := req.Msg.RedirectUrl
+func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL string) (string, error) {
 
-	oauthApp, err := svc.getOAuthApp(identityProvider)
+	oauthApp, _ := svc.oauthApps[github]
+	accessToken, err := oauthApp.ExchangeCode(code, &oauth.ExchangeCodeOption{RedirectURL: &redirectURL})
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	accessToken, err := oauthApp.ExchangeCode(code, &oauth.ExchangeCodeOption{RedirectURL: redirectURL})
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return "", fmt.Errorf("denied: %v", err)
 	}
 
 	profile, err := oauthApp.GetUserProfile(accessToken)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return "", fmt.Errorf("denied: %v", err)
 	}
 
 	tx := transaction.New[postgres.User](
@@ -113,14 +112,14 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 	user, txErr := tx.Exec(ctx, func(c context.Context, q *postgres.Queries) (*postgres.User, error) {
 		u, err := q.GetUserByEmailAndIDP(ctx, postgres.GetUserByEmailAndIDPParams{
 			Email:            profile.Email,
-			IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
+			IdentityProvider: typesv1.IdentityProvider_name[int32(typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB)],
 		})
 		if err == nil {
 			return &u, nil
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			u, err := q.CreateUser(ctx, postgres.CreateUserParams{
-				IdentityProvider: typesv1.IdentityProvider_name[int32(identityProvider)],
+				IdentityProvider: typesv1.IdentityProvider_name[int32(typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB)],
 				Email:            profile.Email,
 				Username:         profile.TempName(),
 				AvatarUrl:        profile.AvatarURL,
@@ -133,11 +132,17 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		return nil, err
 	})
 	if txErr != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("executing tx: %v", txErr))
+		return "", fmt.Errorf("internal: %v", err)
 	}
-	slog.InfoContext(ctx, "user", slog.Int64("id", user.ID))
-	// TODO: issue jwt token, create new session
-	return nil, nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user": user.ID,
+		"ttl":  svc.timeNow().Add(time.Hour).Unix(),
+	})
+	gsmAuthToken, err := token.SignedString("some-secret")
+	if err != nil {
+		return "", fmt.Errorf("internal: %v", err)
+	}
+	return gsmAuthToken, nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
@@ -164,15 +169,6 @@ func WithGitHubOAuthApp(app oauth.App) OAuthAppOption {
 		_, exists := oa[github]
 		if !exists {
 			oa[github] = app
-		}
-	}
-}
-
-func WithOAuthApp(provider string, app oauth.App) OAuthAppOption {
-	return func(oa map[string]oauth.App) {
-		_, exists := oa[provider]
-		if !exists {
-			oa[provider] = app
 		}
 	}
 }

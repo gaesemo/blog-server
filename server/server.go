@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -19,15 +20,17 @@ import (
 // interface - type - const - var - new func - public receiver func - private receiver func - public func - private func
 
 type Server struct {
-	port uint16
-	db   *pgx.Conn
+	logger *slog.Logger
+	port   uint16
+	db     *pgx.Conn
 	// objstorage
 }
 
 func New(logger *slog.Logger, port uint16, db *pgx.Conn) *Server {
 	return &Server{
-		port: port,
-		db:   db,
+		logger: logger,
+		port:   port,
+		db:     db,
 	}
 }
 
@@ -55,6 +58,27 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.Handle(path, handler) // TODO: add middlewares e.g. panic recoverer, request logger
+	mux.HandleFunc("GET /oauth/github/callback", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		code := r.URL.Query().Get("code")
+		redirectURL := r.URL.Query().Get("redirect_uri")
+		authToken, err := auth.GitHubCallback(ctx, code, redirectURL)
+		if err != nil {
+			params := url.Values{}
+			params.Add("status", "error")
+			params.Add("message", err.Error())
+			http.Redirect(w, r, redirectURL+"?"+params.Encode(), http.StatusMovedPermanently)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth_token",
+			Value:    authToken,
+			Path:     "/",
+			MaxAge:   3600,
+			HttpOnly: true,
+		})
+		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
+	})
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
