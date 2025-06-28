@@ -60,7 +60,6 @@ func (s *Server) Serve(ctx context.Context) error {
 	mux := http.NewServeMux()
 	{
 		path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
-		handler = withCORS(handler)
 		mux.Handle(path, handler)
 	}
 	{
@@ -86,14 +85,23 @@ func (s *Server) Serve(ctx context.Context) error {
 			})
 			http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 		})
-		handler = withCORS(handler)
 		mux.Handle(path, handler)
 	}
+
+	cors := cors.New(cors.Options{
+		AllowedOrigins:       []string{"localhost:3000"},
+		AllowedMethods:       connectcors.AllowedMethods(),
+		AllowedHeaders:       connectcors.AllowedHeaders(),
+		ExposedHeaders:       connectcors.ExposedHeaders(),
+		AllowCredentials:     false,
+		OptionsPassthrough:   true,
+		OptionsSuccessStatus: http.StatusOK,
+	})
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
 		Addr:    addr, // :port
-		Handler: mux,
+		Handler: cors.Handler(mux),
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -126,7 +134,7 @@ func (s *Server) Serve(ctx context.Context) error {
 func withCORS(h http.Handler) http.Handler {
 	middlewares := cors.New(cors.Options{
 		AllowedOrigins: []string{"localhost:3000"},
-		AllowedMethods: []string{"OPTION, GET, POST"},
+		AllowedMethods: connectcors.AllowedMethods(),
 		AllowedHeaders: connectcors.AllowedHeaders(),
 		ExposedHeaders: connectcors.ExposedHeaders(),
 	})
