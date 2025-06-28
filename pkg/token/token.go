@@ -4,22 +4,26 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
+)
+
+var (
+	signingMethod = jwt.SigningMethodHS256
+	signingSecret = viper.GetString("JWT_SIGNING_SECRET")
 )
 
 var _ jwt.Claims = (*UserClaims)(nil)
 
 type UserClaims struct {
-	UserID   int64
-	Username string
-	// standard claims
-	Audience       []string
-	Issuer         string
-	IssuedAt       time.Time
-	ExpirationTime time.Time
-	NotBefore      time.Time
+	Audience       []string  `json:"aud"`
+	Issuer         string    `json:"iss"`
+	IssuedAt       time.Time `json:"iat"`
+	ExpirationTime time.Time `json:"exp"`
+	NotBefore      time.Time `json:"nbf"`
+	UserID         int64     `json:"uid"`
 }
 
-func NewClaim() *UserClaims {
+func NewUserClaims() *UserClaims {
 	return &UserClaims{
 		Audience:       []string{},
 		Issuer:         "",
@@ -27,36 +31,46 @@ func NewClaim() *UserClaims {
 		ExpirationTime: time.Time{},
 		NotBefore:      time.Time{},
 		UserID:         0,
-		Username:       "",
 	}
 }
 
+func NewWithUserClaims(claims UserClaims) *jwt.Token {
+	return jwt.NewWithClaims(signingMethod, claims)
+}
+
+func ParseWithClaims(tok string, claims *UserClaims) (*jwt.Token, error) {
+	keyFunc := func(t *jwt.Token) (any, error) {
+		return signingSecret, nil
+	}
+	return jwt.ParseWithClaims(tok, claims, keyFunc)
+}
+
 // GetAudience implements jwt.Claims.
-func (u *UserClaims) GetAudience() (jwt.ClaimStrings, error) {
+func (u UserClaims) GetAudience() (jwt.ClaimStrings, error) {
 	return jwt.ClaimStrings(u.Audience), nil
 }
 
 // GetExpirationTime implements jwt.Claims.
-func (u *UserClaims) GetExpirationTime() (*jwt.NumericDate, error) {
+func (u UserClaims) GetExpirationTime() (*jwt.NumericDate, error) {
 	return jwt.NewNumericDate(u.ExpirationTime), nil
 }
 
 // GetIssuedAt implements jwt.Claims.
-func (u *UserClaims) GetIssuedAt() (*jwt.NumericDate, error) {
+func (u UserClaims) GetIssuedAt() (*jwt.NumericDate, error) {
 	return jwt.NewNumericDate(u.IssuedAt), nil
 }
 
 // GetIssuer implements jwt.Claims.
-func (u *UserClaims) GetIssuer() (string, error) {
+func (u UserClaims) GetIssuer() (string, error) {
 	return u.Issuer, nil
 }
 
 // GetNotBefore implements jwt.Claims.
-func (u *UserClaims) GetNotBefore() (*jwt.NumericDate, error) {
+func (u UserClaims) GetNotBefore() (*jwt.NumericDate, error) {
 	return jwt.NewNumericDate(u.NotBefore), nil
 }
 
 // GetSubject implements jwt.Claims.
-func (u *UserClaims) GetSubject() (string, error) {
+func (u UserClaims) GetSubject() (string, error) {
 	return "", nil
 }

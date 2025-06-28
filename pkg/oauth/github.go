@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -83,7 +82,6 @@ func (g *github) ExchangeCode(code string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("exchanging token status: %d body: %s", resp.StatusCode, string(body))
 	}
-	slog.Info("resp body", slog.Any("response", string(body)))
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`

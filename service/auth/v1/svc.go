@@ -84,11 +84,13 @@ func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.
 }
 
 func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
+	ll := svc.logger.With("login", req.Spec().Procedure)
 	identityProvider := req.Msg.IdentityProvider
 	code := req.Msg.Code
 
 	oauthApp, _ := svc.getOAuthApp(identityProvider)
 
+	ll.DebugContext(ctx, "exchanging temporary code with access token", slog.String("code", code))
 	accessToken, err := oauthApp.ExchangeCode(code)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("exchaning code: %v", err))
@@ -144,17 +146,28 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		"exp": jwt.NewNumericDate(svc.timeNow().Add(time.Hour)),
 		"nbf": jwt.NewNumericDate(svc.timeNow()),
 		"uid": user.ID,
-		"unm": user.Username,
-		"ava": user.AvatarUrl,
 	})
 	gsmAccessToken, err := token.SignedString([]byte(viper.GetString("JWT_SIGNING_SECRET")))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signing token: %v", err))
 	}
-	return connect.NewResponse(&authv1.LoginResponse{
+	resp := connect.NewResponse(&authv1.LoginResponse{
 		Token:     gsmAccessToken,
 		IsNewUser: isNewUser,
-	}), nil
+	})
+
+	cookie := &http.Cookie{
+		Name:     "token",
+		Value:    gsmAccessToken,
+		Expires:  svc.timeNow().Add(time.Hour),
+		MaxAge:   3600,
+		HttpOnly: true,
+		Path:     "/",
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+	resp.Header().Set("Set-Cookie", cookie.String())
+	return resp, nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {

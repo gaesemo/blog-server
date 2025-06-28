@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
 	"github.com/gaesemo/blog-api/go/service/auth/v1/authv1connect"
+	"github.com/gaesemo/blog-server/pkg/authn"
 	"github.com/gaesemo/blog-server/pkg/oauth"
 	authsvc "github.com/gaesemo/blog-server/service/auth/v1"
 	"github.com/google/uuid"
@@ -57,8 +59,21 @@ func (s *Server) Serve(ctx context.Context) error {
 	)
 
 	mux := http.NewServeMux()
-	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
+	interceptors := connect.WithInterceptors(authn.NewLoggingInterceptor())
+	path, handler := authv1connect.NewAuthServiceHandler(auth, interceptors) // TOOD: add request id interceptor, add logging interceptor,
 	mux.Handle(path, handler)
+
+	mux.HandleFunc("GET /cookie", func(w http.ResponseWriter, r *http.Request) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "token",
+			Value:    "this-is-token-blah-blah",
+			Path:     "/",
+			Expires:  timeNow().Add(time.Hour),
+			MaxAge:   3600,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+	})
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
@@ -94,10 +109,12 @@ func (s *Server) Serve(ctx context.Context) error {
 }
 
 func withCORS(h http.Handler) http.Handler {
+	allowedHeaders := connectcors.AllowedHeaders()
+	allowedHeaders = append(allowedHeaders, "Credentials")
 	middlewares := cors.New(cors.Options{
 		AllowedOrigins:       []string{"http://localhost:3000"},
 		AllowedMethods:       connectcors.AllowedMethods(),
-		AllowedHeaders:       connectcors.AllowedHeaders(),
+		AllowedHeaders:       allowedHeaders,
 		AllowCredentials:     true,
 		ExposedHeaders:       connectcors.ExposedHeaders(),
 		Debug:                true,
