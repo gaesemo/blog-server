@@ -46,3 +46,9 @@ AND id > @cursor
 ORDER BY updated_at DESC
 LIMIT $1;
 
+-- name: GetPostById :one
+SELECT *
+FROM posts
+WHERE deleted_at IS NULL
+AND id = $1;
+

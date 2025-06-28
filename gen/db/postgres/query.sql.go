@@ -111,6 +111,30 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getPostById = `-- name: GetPostById :one
+SELECT id, likes, views, title, body, user_id, created_at, updated_at, deleted_at
+FROM posts
+WHERE deleted_at IS NULL
+AND id = $1
+`
+
+func (q *Queries) GetPostById(ctx context.Context, id int64) (Post, error) {
+	row := q.db.QueryRow(ctx, getPostById, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.Views,
+		&i.Title,
+		&i.Body,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getUserByEmailAndIDP = `-- name: GetUserByEmailAndIDP :one
 SELECT id, identity_provider, email, username, avatar_url, about_me, created_at, updated_at, deleted_at
 FROM users
@@ -197,80 +221,6 @@ func (q *Queries) ListRecentPosts(ctx context.Context, arg ListRecentPostsParams
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listRecentPostsWithUsers = `-- name: ListRecentPostsWithUsers :many
-SELECT p.id, likes, views, title, body, user_id, p.created_at, p.updated_at, p.deleted_at, u.id, identity_provider, email, username, avatar_url, about_me, u.created_at, u.updated_at, u.deleted_at
-FROM posts AS p
-LEFT JOIN users AS u
-ON p.deletes_at IS NULL AND p.user_id = u.id AND p.id > $2 
-ORDER BY p.updated_at DESC
-LIMIT $1
-`
-
-type ListRecentPostsWithUsersParams struct {
-	Limit  int32
-	Cursor int64
-}
-
-type ListRecentPostsWithUsersRow struct {
-	ID               int64
-	Likes            int64
-	Views            int64
-	Title            string
-	Body             string
-	UserID           int64
-	CreatedAt        pgtype.Timestamptz
-	UpdatedAt        pgtype.Timestamptz
-	DeletedAt        pgtype.Timestamptz
-	ID_2             pgtype.Int8
-	IdentityProvider pgtype.Text
-	Email            pgtype.Text
-	Username         pgtype.Text
-	AvatarUrl        pgtype.Text
-	AboutMe          pgtype.Text
-	CreatedAt_2      pgtype.Timestamptz
-	UpdatedAt_2      pgtype.Timestamptz
-	DeletedAt_2      pgtype.Timestamptz
-}
-
-func (q *Queries) ListRecentPostsWithUsers(ctx context.Context, arg ListRecentPostsWithUsersParams) ([]ListRecentPostsWithUsersRow, error) {
-	rows, err := q.db.Query(ctx, listRecentPostsWithUsers, arg.Limit, arg.Cursor)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListRecentPostsWithUsersRow
-	for rows.Next() {
-		var i ListRecentPostsWithUsersRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Likes,
-			&i.Views,
-			&i.Title,
-			&i.Body,
-			&i.UserID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-			&i.ID_2,
-			&i.IdentityProvider,
-			&i.Email,
-			&i.Username,
-			&i.AvatarUrl,
-			&i.AboutMe,
-			&i.CreatedAt_2,
-			&i.UpdatedAt_2,
-			&i.DeletedAt_2,
 		); err != nil {
 			return nil, err
 		}
