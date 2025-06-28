@@ -10,11 +10,13 @@ import (
 	"strconv"
 	"time"
 
+	connectcors "connectrpc.com/cors"
 	"github.com/gaesemo/blog-api/go/service/auth/v1/authv1connect"
 	"github.com/gaesemo/blog-server/pkg/oauth"
 	authsvc "github.com/gaesemo/blog-server/service/auth/v1"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/cors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -55,31 +57,38 @@ func (s *Server) Serve(ctx context.Context) error {
 		authsvc.WithGitHubOAuthApp(oauth.NewGitHub(httpClient, randStr)),
 	)
 
-	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
-
 	mux := http.NewServeMux()
-	mux.Handle(path, handler) // TODO: add middlewares e.g. panic recoverer, request logger
-	mux.HandleFunc("GET /oauth/github/callback", func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		code := r.URL.Query().Get("code")
-		redirectURL := r.URL.Query().Get("redirect_uri")
-		authToken, err := auth.GitHubCallback(ctx, code, redirectURL)
-		if err != nil {
-			params := url.Values{}
-			params.Add("status", "error")
-			params.Add("message", err.Error())
-			http.Redirect(w, r, redirectURL+"?"+params.Encode(), http.StatusMovedPermanently)
-			return
-		}
-		http.SetCookie(w, &http.Cookie{
-			Name:     "auth_token",
-			Value:    authToken,
-			Path:     "/",
-			MaxAge:   3600,
-			HttpOnly: true,
+	{
+		path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
+		handler = withCORS(handler)
+		mux.Handle(path, handler)
+	}
+	{
+		var handler http.Handler
+		path, handler := "/oauth/github/callback", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			code := r.URL.Query().Get("code")
+			redirectURL := r.URL.Query().Get("redirect_uri")
+			authToken, err := auth.GitHubCallback(ctx, code, redirectURL)
+			if err != nil {
+				params := url.Values{}
+				params.Add("status", "error")
+				params.Add("message", err.Error())
+				http.Redirect(w, r, redirectURL+"?"+params.Encode(), http.StatusMovedPermanently)
+				return
+			}
+			http.SetCookie(w, &http.Cookie{
+				Name:     "auth_token",
+				Value:    authToken,
+				Path:     "/",
+				MaxAge:   3600,
+				HttpOnly: true,
+			})
+			http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
 		})
-		http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
-	})
+		handler = withCORS(handler)
+		mux.Handle(path, handler)
+	}
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
@@ -112,4 +121,14 @@ func (s *Server) Serve(ctx context.Context) error {
 		return fmt.Errorf("server stopped: %v", err)
 	}
 	return nil
+}
+
+func withCORS(h http.Handler) http.Handler {
+	middlewares := cors.New(cors.Options{
+		AllowedOrigins: []string{"localhost:3000"},
+		AllowedMethods: []string{"OPTION, GET, POST"},
+		AllowedHeaders: connectcors.AllowedHeaders(),
+		ExposedHeaders: connectcors.ExposedHeaders(),
+	})
+	return middlewares.Handler(h)
 }
