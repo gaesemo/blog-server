@@ -128,7 +128,7 @@ func (s *service) Detail(ctx context.Context, req *connect.Request[postv1.Detail
 
 // List implements postv1connect.PostServiceHandler.
 func (s *service) List(ctx context.Context, req *connect.Request[postv1.ListRequest]) (*connect.Response[postv1.ListResponse], error) {
-	cur := cursor.MustParseInt64(req.Msg.Curosr)
+	cur := cursor.MustParseInt64(req.Msg.Cursor)
 
 	rows, err := s.queries.ListRecentPosts(ctx, postgres.ListRecentPostsParams{
 		Limit:  10,
