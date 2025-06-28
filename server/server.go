@@ -123,11 +123,12 @@ func (s *Server) Serve(ctx context.Context) error {
 
 func withCORS(h http.Handler) http.Handler {
 	middlewares := cors.New(cors.Options{
-		AllowedOrigins: []string{"http://localhost:3000"},
-		AllowedMethods: connectcors.AllowedMethods(),
-		AllowedHeaders: connectcors.AllowedHeaders(),
-		ExposedHeaders: connectcors.ExposedHeaders(),
-		Debug:          true,
+		AllowedOrigins:       []string{"http://localhost:3000"},
+		AllowedMethods:       connectcors.AllowedMethods(),
+		AllowedHeaders:       connectcors.AllowedHeaders(),
+		ExposedHeaders:       connectcors.ExposedHeaders(),
+		Debug:                true,
+		OptionsSuccessStatus: http.StatusOK,
 	})
 	return middlewares.Handler(h)
 }
