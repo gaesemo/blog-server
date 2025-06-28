@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"connectrpc.com/authn"
 	"connectrpc.com/connect"
+	"github.com/gaesemo/blog-server/pkg/token"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/spf13/viper"
 )
 
 type Authenticator interface {
@@ -15,16 +16,22 @@ type Authenticator interface {
 }
 
 func Authenticate(ctx context.Context, req *http.Request) (any, error) {
-	tokenStr, ok := authn.BearerToken(req)
-	if !ok {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("bearer token required"))
+	var tok string
+	if cookie, err := req.Cookie("tok"); err == nil {
+		tok = cookie.Value
+	} else {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("auth token not provided"))
 	}
-	keyFunc := func(t *jwt.Token) (any, error) {
-		return nil, nil
-	}
-	_, err := jwt.ParseWithClaims(tokenStr, jwt.MapClaims{}, keyFunc)
+
+	claims := token.NewClaim()
+	token, err := jwt.ParseWithClaims(tok, claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(viper.GetString("JWT_SIGNING_SECRET")), nil
+	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("parsing token: %v", err))
+	}
+	if !token.Valid {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid token"))
 	}
 	return nil, nil
 }

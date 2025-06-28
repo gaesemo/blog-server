@@ -94,6 +94,8 @@ func (s *Server) Serve(ctx context.Context) error {
 }
 
 func withCORS(h http.Handler) http.Handler {
+	allowedHeaders := connectcors.AllowedHeaders()
+	allowedHeaders = append(allowedHeaders, "Access-Control-Allow-Credentials")
 	middlewares := cors.New(cors.Options{
 		AllowedOrigins:       []string{"http://localhost:3000"},
 		AllowedMethods:       connectcors.AllowedMethods(),
