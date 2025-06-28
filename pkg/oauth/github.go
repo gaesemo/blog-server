@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -65,7 +66,10 @@ func (g *github) ExchangeCode(code string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request body: %v", err)
 	}
 
-	resp, err := g.httpClient.Post(g.config.Endpoint.TokenURL, "application/json", bytes.NewBuffer(jsonData))
+	req, _ := http.NewRequest("POST", g.config.Endpoint.TokenURL, bytes.NewBuffer(jsonData))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := g.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to exchange code: %v", err)
 	}
@@ -79,6 +83,7 @@ func (g *github) ExchangeCode(code string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("exchanging token status: %d body: %s", resp.StatusCode, string(body))
 	}
+	slog.Info("resp body", slog.Any("response", string(body)))
 
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`

@@ -38,4 +38,4 @@ USER appuser
 EXPOSE 8080
 
 # Command to run
-CMD ["./gsm", "serve"]
+CMD ["./gsm", "serve", "--log-level", "debug"]

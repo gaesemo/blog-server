@@ -140,7 +140,7 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		"unm": user.Username,
 		"ava": user.AvatarUrl,
 	})
-	gsmAccessToken, err := token.SignedString(viper.GetString("JWT_SIGNING_SECRET"))
+	gsmAccessToken, err := token.SignedString([]byte(viper.GetString("JWT_SIGNING_SECRET")))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signing token: %v", err))
 	}
