@@ -42,12 +42,6 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/8M=
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
-github.com/gaesemo/blog-api/go v0.0.0-20250628053030-2163a9a9ba41 h1:YLe0PYJzDvhr20TNq/9PrefqqETPHd+zZbow8ZXe4zM=
-github.com/gaesemo/blog-api/go v0.0.0-20250628053030-2163a9a9ba41/go.mod h1:xgt6AcLGbIfivA2YnI41CgZ6jXjY6ngi2LDrMEZ7M1A=
-github.com/gaesemo/blog-api/go v0.0.0-20250628084229-2a642b55157c h1:PtHwuqZ80yKofV1RSp2A1alsR+0g4FuAptXGCF0bAoo=
-github.com/gaesemo/blog-api/go v0.0.0-20250628084229-2a642b55157c/go.mod h1:xgt6AcLGbIfivA2YnI41CgZ6jXjY6ngi2LDrMEZ7M1A=
-github.com/gaesemo/blog-api/go v0.0.0-20250628184551-b4d241cafa40 h1:No5uAMIcD8IonKqv1m/QYmb2NjeVWzFfYDNIZa0RqNg=
-github.com/gaesemo/blog-api/go v0.0.0-20250628184551-b4d241cafa40/go.mod h1:xgt6AcLGbIfivA2YnI41CgZ6jXjY6ngi2LDrMEZ7M1A=
 github.com/gaesemo/blog-api/go v0.0.0-20250628192543-f403ce49e1b8 h1:JXRJ+j8XHQhOZ1Pwzsmjw1Z65xlpdiKy1yBhCYK+6MU=
 github.com/gaesemo/blog-api/go v0.0.0-20250628192543-f403ce49e1b8/go.mod h1:xgt6AcLGbIfivA2YnI41CgZ6jXjY6ngi2LDrMEZ7M1A=
 github.com/go-ini/ini v1.67.0 h1:z6ZrTEZqSWOTyH2FlglNbNgARyHG8oLW9gMELqKr06A=

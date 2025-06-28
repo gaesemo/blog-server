@@ -2,15 +2,16 @@ package token
 
 import (
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/spf13/viper"
+	_ "github.com/spf13/viper"
 )
 
 var (
 	signingMethod = jwt.SigningMethodHS256
-	signingSecret = viper.GetString("JWT_SIGNING_SECRET")
+	signingSecret = os.Getenv("JWT_SIGNING_SECRET")
 )
 
 var _ jwt.Claims = (*UserClaims)(nil)
@@ -41,6 +42,7 @@ func NewWithUserClaims(claims UserClaims) *jwt.Token {
 
 func ParseWithClaims(tok string, claims *UserClaims) (*jwt.Token, error) {
 	keyFunc := func(t *jwt.Token) (any, error) {
+		// slog.Debug("keyfunc", slog.String("sec", signingSecret))
 		return []byte(signingSecret), nil
 	}
 	t, err := jwt.ParseWithClaims(tok, claims, keyFunc)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"connectrpc.com/connect"
@@ -14,11 +15,10 @@ import (
 	typesv1 "github.com/gaesemo/blog-api/go/types/v1"
 	"github.com/gaesemo/blog-server/gen/db/postgres"
 	"github.com/gaesemo/blog-server/pkg/oauth"
+	"github.com/gaesemo/blog-server/pkg/token"
 	"github.com/gaesemo/blog-server/pkg/transaction"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/spf13/viper"
 )
 
 var _ authv1connect.AuthServiceHandler = (*service)(nil)
@@ -140,14 +140,15 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 
 	user := result.User
 	isNewUser := result.IsNewUser
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"iss": "gsm",
-		"iat": jwt.NewNumericDate(svc.timeNow()),
-		"exp": jwt.NewNumericDate(svc.timeNow().Add(time.Hour)),
-		"nbf": jwt.NewNumericDate(svc.timeNow()),
-		"uid": user.ID,
+	token := token.NewWithUserClaims(token.UserClaims{
+		Audience:       []string{},
+		Issuer:         "gsm",
+		IssuedAt:       time.Now(),
+		ExpirationTime: time.Now().Add(time.Hour),
+		NotBefore:      time.Now(),
+		UserID:         user.ID,
 	})
-	gsmAccessToken, err := token.SignedString([]byte(viper.GetString("JWT_SIGNING_SECRET")))
+	gsmAccessToken, err := token.SignedString([]byte(os.Getenv("JWT_SIGNING_SECRET")))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signing token: %v", err))
 	}
