@@ -41,7 +41,7 @@ func NewWithUserClaims(claims UserClaims) *jwt.Token {
 
 func ParseWithClaims(tok string, claims *UserClaims) (*jwt.Token, error) {
 	keyFunc := func(t *jwt.Token) (any, error) {
-		return signingSecret, nil
+		return []byte(signingSecret), nil
 	}
 	t, err := jwt.ParseWithClaims(tok, claims, keyFunc)
 	if err != nil {
