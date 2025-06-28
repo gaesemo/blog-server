@@ -23,7 +23,6 @@ require (
 )
 
 require (
-	connectrpc.com/authn v0.2.0
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect

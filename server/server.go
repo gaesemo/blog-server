@@ -99,7 +99,7 @@ func withCORS(h http.Handler) http.Handler {
 	middlewares := cors.New(cors.Options{
 		AllowedOrigins:       []string{"http://localhost:3000"},
 		AllowedMethods:       connectcors.AllowedMethods(),
-		AllowedHeaders:       connectcors.AllowedHeaders(),
+		AllowedHeaders:       allowedHeaders,
 		ExposedHeaders:       connectcors.ExposedHeaders(),
 		Debug:                true,
 		OptionsSuccessStatus: http.StatusOK,
