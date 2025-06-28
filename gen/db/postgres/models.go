@@ -8,6 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Post struct {
+	ID        int64
+	Likes     int64
+	Views     int64
+	Title     string
+	Body      string
+	UserID    int64
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+	DeletedAt pgtype.Timestamptz
+}
+
 type User struct {
 	ID               int64
 	IdentityProvider string

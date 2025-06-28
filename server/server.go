@@ -9,12 +9,15 @@ import (
 	"strconv"
 	"time"
 
+	"connectrpc.com/authn"
 	"connectrpc.com/connect"
 	connectcors "connectrpc.com/cors"
 	"github.com/gaesemo/blog-api/go/service/auth/v1/authv1connect"
-	"github.com/gaesemo/blog-server/pkg/authn"
+	"github.com/gaesemo/blog-api/go/service/post/v1/postv1connect"
+	"github.com/gaesemo/blog-server/pkg/middleware"
 	"github.com/gaesemo/blog-server/pkg/oauth"
 	authsvc "github.com/gaesemo/blog-server/service/auth/v1"
+	postsvc "github.com/gaesemo/blog-server/service/post/v1"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/cors"
@@ -48,8 +51,7 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	db := s.db
 	httpClient := &http.Client{Timeout: 10 * time.Second}
-
-	auth := authsvc.New(
+	authService := authsvc.New(
 		slog.Default(),
 		httpClient,
 		db,
@@ -57,28 +59,39 @@ func (s *Server) Serve(ctx context.Context) error {
 		randStr,
 		authsvc.WithGitHubOAuthApp(oauth.NewGitHub(httpClient, randStr)),
 	)
+	postService := postsvc.New(
+		slog.Default(),
+		db,
+		timeNow,
+	)
 
 	mux := http.NewServeMux()
-	interceptors := connect.WithInterceptors(authn.NewLoggingInterceptor())
-	path, handler := authv1connect.NewAuthServiceHandler(auth, interceptors) // TOOD: add request id interceptor, add logging interceptor,
-	mux.Handle(path, handler)
 
-	mux.HandleFunc("GET /cookie", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{
-			Name:     "token",
-			Value:    "this-is-token-blah-blah",
-			Path:     "/",
-			Expires:  timeNow().Add(time.Hour),
-			MaxAge:   3600,
-			HttpOnly: true,
-			SameSite: http.SameSiteLaxMode,
-		})
-	})
+	authorizer := authn.NewMiddleware(
+		middleware.Authorize,
+	)
+	{
+		path, svcHandler := authv1connect.NewAuthServiceHandler(
+			authService,
+			connect.WithInterceptors(middleware.UnaryLogger()),
+		) // TOOD: add request id interceptor, add logging interceptor,
+		mux.Handle(path, svcHandler)
+	}
+	{
+		path, svcHandler := postv1connect.NewPostServiceHandler(
+			postService,
+			connect.WithInterceptors(middleware.UnaryLogger()),
+		)
+		svcHandler = authorizer.Wrap(svcHandler)
+		mux.Handle(path, svcHandler)
+	}
+
+	handler := withCORS(mux)
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
 		Addr:    addr,
-		Handler: withCORS(mux),
+		Handler: handler,
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)

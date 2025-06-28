@@ -18,7 +18,7 @@ require (
 
 require (
 	connectrpc.com/cors v0.1.0
-	github.com/gaesemo/blog-api/go v0.0.0-20250628084229-2a642b55157c
+	github.com/gaesemo/blog-api/go v0.0.0-20250628184551-b4d241cafa40
 	github.com/rs/cors v1.11.1
 )
 

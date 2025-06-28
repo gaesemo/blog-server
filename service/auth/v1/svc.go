@@ -171,7 +171,8 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
-	return nil, nil
+	// TODO: cookie 무효화 하기
+	return connect.NewResponse(&authv1.LogoutResponse{}), nil
 }
 
 func (svc *service) getOAuthApp(identityProvider typesv1.IdentityProvider) (oauth.App, error) {
