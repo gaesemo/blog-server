@@ -45,7 +45,7 @@ type service struct {
 func (s *service) Create(ctx context.Context, req *connect.Request[postv1.CreateRequest]) (*connect.Response[postv1.CreateResponse], error) {
 	uid := authn.GetInfo(ctx).(*int64)
 	if uid == nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("author not found"))
+		return connect.NewResponse(&postv1.CreateResponse{}), connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("author not found"))
 	}
 	content := req.Msg.PostContent
 	title := content.Title
@@ -87,7 +87,7 @@ func (s *service) Create(ctx context.Context, req *connect.Request[postv1.Create
 		}, nil
 	})
 	if txErr != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("creating post: %v", txErr))
+		return connect.NewResponse(&postv1.CreateResponse{}), connect.NewError(connect.CodeInternal, fmt.Errorf("creating post: %v", txErr))
 	}
 	return connect.NewResponse(&postv1.CreateResponse{
 		Post: &typesv1.Post{
@@ -221,14 +221,17 @@ func (s *service) Update(ctx context.Context, req *connect.Request[postv1.Update
 
 func pbPost(p *postgres.Post) *typesv1.Post {
 	return &typesv1.Post{
-		Id:        p.ID,
-		Likes:     p.Likes,
-		Views:     p.Views,
-		Author:    &typesv1.User{},
-		Content:   &typesv1.PostContent{},
-		CreatedAt: &timestamppb.Timestamp{},
-		UpdatedAt: &timestamppb.Timestamp{},
-		DeletedAt: &timestamppb.Timestamp{},
+		Id:     p.ID,
+		Likes:  p.Likes,
+		Views:  p.Views,
+		Author: &typesv1.User{},
+		Content: &typesv1.PostContent{
+			Title: p.Title,
+			Body:  p.Body,
+		},
+		CreatedAt: timestamppb.New(p.CreatedAt.Time),
+		UpdatedAt: timestamppb.New(p.UpdatedAt.Time),
+		DeletedAt: nil,
 	}
 }
 
