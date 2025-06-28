@@ -1,7 +1,10 @@
 package oauth
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -40,38 +43,93 @@ type github struct {
 }
 
 // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#1-request-a-users-github-identity
-func (g *github) GetAuthURL(option *GetAuthURLOption) (string, error) {
+func (g *github) GetAuthURL() (string, error) {
 	params := url.Values{}
 	params.Add("client_id", g.config.ClientID)
-	if option != nil && option.RedirectURL != nil {
-		r := *option.RedirectURL
-		u, err := url.Parse(r)
-		if err != nil {
-			return "", fmt.Errorf("invalid redirect url: %v", err)
-		}
-		if _, err := g.isValidRedirectURL(*u); err != nil {
-			return "", fmt.Errorf("invalid redirect url: %v", err)
-		}
-		params.Add("redirect_uri", r)
-	}
 	params.Add("scope", strings.Join(g.config.Scopes, " "))
 	params.Add("state", g.randStrFunc())
 	authUrl := g.config.Endpoint.AuthURL + "?" + params.Encode()
 	return authUrl, nil
 }
 
-func (g *github) ExchangeCode(code string, option *ExchangeCodeOption) (string, error) {
-	return "", nil
-}
+func (g *github) ExchangeCode(code string) (string, error) {
 
-func (g *github) GetUserProfile(accessToken string) (UserProfile, error) {
-	return UserProfile{}, nil
-}
-
-func (g *github) isValidRedirectURL(u url.URL) (bool, error) {
-	d, _ := url.Parse(g.config.RedirectURL) // default redirect url configured in GitHub oauth app setting
-	if (d.Hostname() != u.Hostname()) || (d.Port() != u.Port()) {
-		return false, fmt.Errorf("redirect url %q's host and port must match configured oauth app settings", u.String())
+	reqBody := map[string]string{
+		"client_id":     g.config.ClientID,
+		"client_secret": g.config.ClientSecret,
+		"code":          code,
 	}
-	return true, nil
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request body: %v", err)
+	}
+
+	resp, err := g.httpClient.Post(g.config.Endpoint.TokenURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to exchange code: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("exchanging token status: %d body: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+		Scope       string `json:"scope"`
+	}
+
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", fmt.Errorf("failed to parse token response: %v", err)
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+func (g *github) GetUserProfile(accessToken string) (*UserProfile, error) {
+	req, err := http.NewRequest("GET", "https://api.github.com/user", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := g.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("requesting github user: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("requesting user status: %d body: %s", resp.StatusCode, string(body))
+	}
+
+	var user struct {
+		Email     string `json:"email"`
+		Name      string `json:"name"`
+		AvatarURL string `json:"avatar_url"`
+	}
+
+	if err := json.Unmarshal(body, &user); err != nil {
+		return nil, fmt.Errorf("unmarshalling json: %v", err)
+	}
+
+	return &UserProfile{
+		Name:      user.Name,
+		Email:     user.Email,
+		AvatarURL: user.AvatarURL,
+	}, nil
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
@@ -58,35 +57,8 @@ func (s *Server) Serve(ctx context.Context) error {
 	)
 
 	mux := http.NewServeMux()
-	{
-		path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
-		mux.Handle(path, handler)
-	}
-	{
-		var handler http.Handler
-		path, handler := "/oauth/github/callback", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := r.Context()
-			code := r.URL.Query().Get("code")
-			redirectURL := r.URL.Query().Get("redirect_uri")
-			authToken, err := auth.GitHubCallback(ctx, code, redirectURL)
-			if err != nil {
-				params := url.Values{}
-				params.Add("status", "error")
-				params.Add("message", err.Error())
-				http.Redirect(w, r, redirectURL+"?"+params.Encode(), http.StatusMovedPermanently)
-				return
-			}
-			http.SetCookie(w, &http.Cookie{
-				Name:     "auth_token",
-				Value:    authToken,
-				Path:     "/",
-				MaxAge:   3600,
-				HttpOnly: true,
-			})
-			http.Redirect(w, r, redirectURL, http.StatusMovedPermanently)
-		})
-		mux.Handle(path, handler)
-	}
+	path, handler := authv1connect.NewAuthServiceHandler(auth) // TOOD: add request id interceptor, add logging interceptor,
+	mux.Handle(path, handler)
 
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{

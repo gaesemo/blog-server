@@ -16,11 +16,10 @@ require (
 	golang.org/x/sync v0.15.0
 )
 
-require github.com/gaesemo/blog-api/go v0.0.0-20250625135930-b7db604db8b5
-
 require (
-	connectrpc.com/cors v0.1.0 // indirect
-	github.com/rs/cors v1.11.1 // indirect
+	connectrpc.com/cors v0.1.0
+	github.com/gaesemo/blog-api/go v0.0.0-20250628053030-2163a9a9ba41
+	github.com/rs/cors v1.11.1
 )
 
 require (

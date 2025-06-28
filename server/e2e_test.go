@@ -74,7 +74,6 @@ func TestGetAuthUrl(t *testing.T) {
 	resp, err := c.Auth.GetAuthURL(ctx, &connect.Request[authv1.GetAuthURLRequest]{
 		Msg: &authv1.GetAuthURLRequest{
 			IdentityProvider: typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB,
-			RedirectUrl:      nil,
 		},
 	})
 	require.NoError(t, err)

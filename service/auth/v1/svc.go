@@ -21,12 +21,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type AuthService interface {
-	authv1connect.AuthServiceHandler
-	GitHubCallback(ctx context.Context, code string, redirectURL string) (string, error)
-}
-
-var _ AuthService = (*service)(nil)
+var _ authv1connect.AuthServiceHandler = (*service)(nil)
 
 func New(
 	logger *slog.Logger,
@@ -35,7 +30,7 @@ func New(
 	timeNow func() time.Time,
 	randStr func() string,
 	opts ...OAuthAppOption,
-) AuthService {
+) authv1connect.AuthServiceHandler {
 	svc := &service{
 		logger:     logger,
 		httpClient: httpClient,
@@ -73,16 +68,13 @@ type service struct {
 func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.GetAuthURLRequest]) (*connect.Response[authv1.GetAuthURLResponse], error) {
 
 	identityProvider := req.Msg.IdentityProvider
-	redirectUrl := req.Msg.RedirectUrl
 
 	oauthApp, err := svc.getOAuthApp(identityProvider)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	authURL, err := oauthApp.GetAuthURL(&oauth.GetAuthURLOption{
-		RedirectURL: redirectUrl,
-	})
+	authURL, err := oauthApp.GetAuthURL()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -91,17 +83,20 @@ func (svc *service) GetAuthURL(ctx context.Context, req *connect.Request[authv1.
 	}), nil
 }
 
-func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL string) (string, error) {
+func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
+	identityProvider := req.Msg.IdentityProvider
+	code := req.Msg.Code
 
-	oauthApp, _ := svc.oauthApps[github]
-	accessToken, err := oauthApp.ExchangeCode(code, &oauth.ExchangeCodeOption{RedirectURL: &redirectURL})
+	oauthApp, _ := svc.getOAuthApp(identityProvider)
+
+	accessToken, err := oauthApp.ExchangeCode(code)
 	if err != nil {
-		return "", fmt.Errorf("denied: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("exchaning code: %v", err))
 	}
 
 	profile, err := oauthApp.GetUserProfile(accessToken)
 	if err != nil {
-		return "", fmt.Errorf("denied: %v", err)
+		return nil, fmt.Errorf("denied: %v", err)
 	}
 
 	tx := transaction.New[postgres.User](
@@ -122,7 +117,7 @@ func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL
 			u, err := q.CreateUser(ctx, postgres.CreateUserParams{
 				IdentityProvider: typesv1.IdentityProvider_name[int32(typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB)],
 				Email:            profile.Email,
-				Username:         profile.TempName(),
+				Username:         profile.Name,
 				AvatarUrl:        profile.AvatarURL,
 				AboutMe:          "",
 				CreatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
@@ -133,7 +128,7 @@ func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL
 		return nil, err
 	})
 	if txErr != nil {
-		return "", fmt.Errorf("internal: %v", err)
+		return nil, fmt.Errorf("in login flow: %v", err)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -145,11 +140,20 @@ func (svc *service) GitHubCallback(ctx context.Context, code string, redirectURL
 		"unm": user.Username,
 		"ava": user.AvatarUrl,
 	})
-	authToken, err := token.SignedString(viper.GetString("JWT_SIGNING_SECRET"))
+	gsmAccessToken, err := token.SignedString(viper.GetString("JWT_SIGNING_SECRET"))
 	if err != nil {
-		return "", fmt.Errorf("internal: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signing token: %v", err))
 	}
-	return authToken, nil
+	resp := connect.NewResponse(&authv1.LoginResponse{})
+	cookie := http.Cookie{
+		Name:     "tok",
+		Value:    gsmAccessToken,
+		Path:     "/",
+		MaxAge:   3600,
+		HttpOnly: true,
+	}
+	resp.Header().Set("Set-Cookie", cookie.String())
+	return resp, nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
