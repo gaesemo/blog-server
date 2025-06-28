@@ -16,12 +16,12 @@ var (
 var _ jwt.Claims = (*UserClaims)(nil)
 
 type UserClaims struct {
-	Audience       []string  `json:"aud"`
-	Issuer         string    `json:"iss"`
-	IssuedAt       time.Time `json:"iat"`
-	ExpirationTime time.Time `json:"exp"`
-	NotBefore      time.Time `json:"nbf"`
-	UserID         int64     `json:"uid"`
+	Audience       []string
+	Issuer         string
+	IssuedAt       time.Time
+	ExpirationTime time.Time
+	NotBefore      time.Time
+	UserID         int64
 }
 
 func NewUserClaims() *UserClaims {
