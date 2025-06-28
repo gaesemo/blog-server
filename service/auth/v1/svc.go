@@ -99,19 +99,24 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		return nil, fmt.Errorf("denied: %v", err)
 	}
 
-	tx := transaction.New[postgres.User](
+	type Result struct {
+		User      *postgres.User
+		IsNewUser bool
+	}
+
+	tx := transaction.New[Result](
 		svc.db,
 		pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadWrite},
 		svc.queries,
 	)
 
-	user, txErr := tx.Exec(ctx, func(c context.Context, q *postgres.Queries) (*postgres.User, error) {
+	result, txErr := tx.Exec(ctx, func(c context.Context, q *postgres.Queries) (*Result, error) {
 		u, err := q.GetUserByEmailAndIDP(ctx, postgres.GetUserByEmailAndIDPParams{
 			Email:            profile.Email,
 			IdentityProvider: typesv1.IdentityProvider_name[int32(typesv1.IdentityProvider_IDENTITY_PROVIDER_GITHUB)],
 		})
 		if err == nil {
-			return &u, nil
+			return &Result{User: &u, IsNewUser: false}, nil
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			u, err := q.CreateUser(ctx, postgres.CreateUserParams{
@@ -123,7 +128,7 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 				CreatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
 				UpdatedAt:        pgtype.Timestamptz{Time: svc.timeNow(), Valid: true},
 			})
-			return &u, err
+			return &Result{User: &u, IsNewUser: true}, err
 		}
 		return nil, err
 	})
@@ -131,6 +136,8 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 		return nil, fmt.Errorf("in login flow: %v", err)
 	}
 
+	user := result.User
+	isNewUser := result.IsNewUser
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"iss": "gsm",
 		"iat": jwt.NewNumericDate(svc.timeNow()),
@@ -144,16 +151,10 @@ func (svc *service) Login(ctx context.Context, req *connect.Request[authv1.Login
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("signing token: %v", err))
 	}
-	resp := connect.NewResponse(&authv1.LoginResponse{})
-	cookie := http.Cookie{
-		Name:     "tok",
-		Value:    gsmAccessToken,
-		Path:     "/",
-		MaxAge:   3600,
-		HttpOnly: true,
-	}
-	resp.Header().Set("Set-Cookie", cookie.String())
-	return resp, nil
+	return connect.NewResponse(&authv1.LoginResponse{
+		Token:     gsmAccessToken,
+		IsNewUser: isNewUser,
+	}), nil
 }
 
 func (svc *service) Logout(ctx context.Context, req *connect.Request[authv1.LogoutRequest]) (*connect.Response[authv1.LogoutResponse], error) {
