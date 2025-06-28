@@ -1,6 +1,7 @@
 package token
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -42,7 +43,12 @@ func ParseWithClaims(tok string, claims *UserClaims) (*jwt.Token, error) {
 	keyFunc := func(t *jwt.Token) (any, error) {
 		return signingSecret, nil
 	}
-	return jwt.ParseWithClaims(tok, claims, keyFunc)
+	t, err := jwt.ParseWithClaims(tok, claims, keyFunc)
+	if err != nil {
+		slog.Error("parsing jwt token", slog.Any("error", err))
+		return nil, err
+	}
+	return t, nil
 }
 
 // GetAudience implements jwt.Claims.
