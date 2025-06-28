@@ -88,20 +88,10 @@ func (s *Server) Serve(ctx context.Context) error {
 		mux.Handle(path, handler)
 	}
 
-	cors := cors.New(cors.Options{
-		AllowedOrigins:       []string{"localhost:3000"},
-		AllowedMethods:       connectcors.AllowedMethods(),
-		AllowedHeaders:       connectcors.AllowedHeaders(),
-		ExposedHeaders:       connectcors.ExposedHeaders(),
-		AllowCredentials:     false,
-		OptionsPassthrough:   true,
-		OptionsSuccessStatus: http.StatusOK,
-	})
-
 	addr := ":" + strconv.FormatUint(uint64(s.port), 10)
 	server := &http.Server{
-		Addr:    addr, // :port
-		Handler: cors.Handler(mux),
+		Addr:    addr,
+		Handler: withCORS(mux),
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -133,10 +123,11 @@ func (s *Server) Serve(ctx context.Context) error {
 
 func withCORS(h http.Handler) http.Handler {
 	middlewares := cors.New(cors.Options{
-		AllowedOrigins: []string{"localhost:3000"},
+		AllowedOrigins: []string{"http://localhost:3000"},
 		AllowedMethods: connectcors.AllowedMethods(),
 		AllowedHeaders: connectcors.AllowedHeaders(),
 		ExposedHeaders: connectcors.ExposedHeaders(),
+		Debug:          true,
 	})
 	return middlewares.Handler(h)
 }
